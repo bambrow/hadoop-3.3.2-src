@@ -500,6 +500,7 @@ public class NodesListManager extends CompositeService implements
   private boolean isValidNode(
       String hostName, Set<String> hostsList, Set<String> excludeList) {
     String ip = resolver.resolve(hostName);
+    // 查看是否：1. 白名单为空，并且不在黑名单中；2. 在白名单中，并且不在黑名单中
     return (hostsList.isEmpty() || hostsList.contains(hostName) || hostsList
         .contains(ip))
         && !(excludeList.contains(hostName) || excludeList.contains(ip));
