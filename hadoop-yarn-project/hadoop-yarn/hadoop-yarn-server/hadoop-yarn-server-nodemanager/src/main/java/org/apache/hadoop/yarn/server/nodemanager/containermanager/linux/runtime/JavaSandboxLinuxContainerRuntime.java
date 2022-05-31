@@ -63,16 +63,27 @@ import static org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.r
 import static org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.runtime.LinuxContainerRuntimeConstants.LOCALIZED_RESOURCES;
 import static org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.runtime.LinuxContainerRuntimeConstants.USER;
 /**
+ * <p>本类扩展了DefaultLinuxContainerRuntime，用于运行Java程序。
+ * 它会为container生成相应的Java安全策略文件，修改Java命令以应用这些策略。</p>
+ *
  * <p>This class extends the {@link DefaultLinuxContainerRuntime} specifically
  * for containers which run Java commands.  It generates a new java security
  * policy file per container and modifies the java command to enable the
  * Java Security Manager with the generated policy.</p>
+ *
+ * <p>通过以下配置修改JavaSandboxLinuxContainerRuntime的行为：</p>
  *
  * The behavior of the {@link JavaSandboxLinuxContainerRuntime} can be modified
  * using the following settings:
  *
  * <ul>
  *   <li>
+ *       yarn.nodemanager.runtime.linux.sandbox-mode
+ *       默认disabled：关闭LinuxContainerRuntime
+ *       可以设置为：
+ *       permissive：JVM容器会遵循安全策略，非JVM容器正常运行
+ *       enforcing：JVM容器会遵循安全策略，非JVM容器禁止运行，抛出异常
+ *
  *     {@value
  *     org.apache.hadoop.yarn.conf.YarnConfiguration#YARN_CONTAINER_SANDBOX} :
  *     This yarn-site.xml setting has three options:
@@ -87,6 +98,9 @@ import static org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.r
  *     </ul>
  *   </li>
  *   <li>
+ *       yarn.nodemanager.runtime.linux.sandbox-mode.local-dirs.permissions
+ *       默认read。此参数决定应用所需文件的权限，包括read,write,execute,delete。
+ *
  *     {@value
  *     org.apache.hadoop.yarn.conf.YarnConfiguration#YARN_CONTAINER_SANDBOX_FILE_PERMISSIONS}
  *     :
@@ -95,6 +109,9 @@ import static org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.r
  *     (e.g. read,write,execute,delete). Defaults to {@code read} for read-only.
  *   </li>
  *   <li>
+ *       yarn.nodemanager.runtime.linux.sandbox-mode.policy
+ *       默认为空。接收一个本地文件系统路径（Java策略文件），作为基础策略。如果不指定，则使用默认的策略文件。
+ *
  *     {@value
  *     org.apache.hadoop.yarn.conf.YarnConfiguration#YARN_CONTAINER_SANDBOX_POLICY}
  *     :
@@ -104,6 +121,9 @@ import static org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.r
  *     java.policy file provided with hadoop resources will be used.
  *   </li>
  *   <li>
+ *       yarn.nodemanager.runtime.linux.sandbox-mode.whitelist-group
+ *       可选配置，可以指定某个队列上的应用不遵循沙箱策略。
+ *
  *     {@value
  *     org.apache.hadoop.yarn.conf.YarnConfiguration#YARN_CONTAINER_SANDBOX_WHITELIST_GROUP}
  *     :
@@ -111,6 +131,9 @@ import static org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.r
  *     sand-boxing process.
  *   </li>
  *   <li>
+ *       yarn.nodemanager.runtime.linux.sandbox-mode.policy.group.$groupName
+ *       可选配置，用于将指定group映射到指定策略。如果一个用户属于多个组，则策略相互叠加。
+ *
  *     {@value
  *     org.apache.hadoop.yarn.conf.YarnConfiguration#YARN_CONTAINER_SANDBOX_POLICY_GROUP_PREFIX}$groupName
  *     :
@@ -287,6 +310,10 @@ public class JavaSandboxLinuxContainerRuntime
     }
   }
 
+  // 是否需要使用JVMSandboxLinuxContainerRuntime
+  // 与其他LinuxContainerRuntime不同，本选项不通过yarn.nodemanager.runtime.linux.type指定
+  // 但仍需在yarn.nodemanager.runtime.linux.allowed-runtimes开启javasandbox
+  // 而是通过yarn.nodemanager.runtime.linux.sandbox-mode指定，需不为disabled
   /**
    * Determine if JVMSandboxLinuxContainerRuntime should be used.  This is
    * decided based on the value of
@@ -378,9 +405,9 @@ public class JavaSandboxLinuxContainerRuntime
    * behavior of each setting.
    */
   public enum SandboxMode {
-    enforcing("enforcing"),
-    permissive("permissive"),
-    disabled("disabled");
+    enforcing("enforcing"), // JVM容器会遵循安全策略，非JVM容器禁止运行，抛出异常
+    permissive("permissive"), // JVM容器会遵循安全策略，非JVM容器正常运行
+    disabled("disabled"); // 关闭LinuxContainerRuntime
 
     private final String mode;
     SandboxMode(String mode){
@@ -468,6 +495,8 @@ public class JavaSandboxLinuxContainerRuntime
         cacheDirs.add(path.getParent().toString());
       }
 
+      // 这里有bug，应该改为（已提交PR）
+      // if (groupPolicyPaths != null && !groupPolicyPaths.isEmpty()) {
       if (groupPolicyPaths != null) {
         for(String policyPath : groupPolicyPaths) {
           Files.copy(Paths.get(policyPath), policyOutStream);
@@ -541,6 +570,8 @@ public class JavaSandboxLinuxContainerRuntime
 
     private static boolean validateJavaHome(String containerJavaHome)
         throws ContainerExecutionException{
+      // JAVA_HOME检测
+      // 对于MapReduce任务，需要配置yarn.app.mapreduce.am.env和mapred.child.env
       if (System.getenv(JAVA_HOME.name()) == null) {
         throw new ContainerExecutionException(
             "JAVA_HOME is not set for NodeManager");

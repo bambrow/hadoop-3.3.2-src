@@ -114,6 +114,7 @@ public class ApplicationMasterService extends AbstractService implements
     this.amsProcessingChain = new AMSProcessingChain(new DefaultAMSProcessor());
   }
 
+  // 从配置中读取所需信息
   @Override
   protected void serviceInit(Configuration conf) throws Exception {
     masterServiceAddress = conf.getSocketAddr(
@@ -149,7 +150,9 @@ public class ApplicationMasterService extends AbstractService implements
     }
   }
 
+  // 初始化处理程序链
   private void initializeProcessingChain(Configuration conf) {
+    // 初始化amsProcessingChain
     amsProcessingChain.init(rmContext, null);
     addPlacementConstraintHandler(conf);
 
@@ -179,12 +182,15 @@ public class ApplicationMasterService extends AbstractService implements
         ApplicationMasterServiceProcessor.class);
   }
 
+  // 服务启动代码
   @Override
   protected void serviceStart() throws Exception {
     Configuration conf = getConfig();
+    // 新建RPC Server
     YarnRPC rpc = YarnRPC.create(conf);
 
     Configuration serverConf = conf;
+    // 如果不是简单鉴权，强制使用基于token的鉴权
     // If the auth is not-simple, enforce it to be token-based.
     serverConf = new Configuration(conf);
     serverConf.set(
@@ -196,6 +202,7 @@ public class ApplicationMasterService extends AbstractService implements
     this.server.addTerseExceptions(
         ApplicationMasterNotRegisteredException.class);
 
+    // 启动服务授权？
     // Enable service authorization?
     if (conf.getBoolean(
         CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHORIZATION, 
@@ -210,6 +217,7 @@ public class ApplicationMasterService extends AbstractService implements
       refreshServiceAcls(conf, RMPolicyProvider.getInstance());
     }
 
+    // 启动RPC Server并更新相应配置
     this.server.start();
     this.masterServiceAddress =
         conf.updateConnectAddr(YarnConfiguration.RM_BIND_HOST,
@@ -239,17 +247,20 @@ public class ApplicationMasterService extends AbstractService implements
     return this.masterServiceAddress;
   }
 
+  // 注册AM的服务端代码
   @Override
   public RegisterApplicationMasterResponse registerApplicationMaster(
       RegisterApplicationMasterRequest request) throws YarnException,
       IOException {
-
+    // 获取必要参数
     AMRMTokenIdentifier amrmTokenIdentifier =
         YarnServerSecurityUtils.authorizeRequest();
     ApplicationAttemptId applicationAttemptId =
         amrmTokenIdentifier.getApplicationAttemptId();
 
     ApplicationId appID = applicationAttemptId.getApplicationId();
+
+    // 获取AllocateResponseLock（根据attempt ID）
     AllocateResponseLock lock = responseMap.get(applicationAttemptId);
     if (lock == null) {
       RMAuditLogger.logFailure(this.rmContext.getRMApps().get(appID).getUser(),

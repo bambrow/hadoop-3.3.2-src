@@ -45,6 +45,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+// 本类代理所有关于LinuxContainerRuntime的操作
+// 包括但不限于：DefaultLinuxContainerRuntime，DockerLinuxContainerRuntime，JavaSandboxLinuxContainerRuntime
+// 或者自定义的Runtime实例
 /**
  * This class is a {@link ContainerRuntime} implementation that delegates all
  * operations to a {@link DefaultLinuxContainerRuntime} instance, a
@@ -118,6 +121,7 @@ public class DelegatingLinuxContainerRuntime implements LinuxContainerRuntime {
   LinuxContainerRuntime pickContainerRuntime(
       Map<String, String> environment) throws ContainerExecutionException {
     LinuxContainerRuntime runtime;
+    // 先检查Java沙箱，避免DockerRuntime被优先选择
     //Sandbox checked first to ensure DockerRuntime doesn't circumvent controls
     if (javaSandboxLinuxContainerRuntime != null &&
         javaSandboxLinuxContainerRuntime.isRuntimeRequested(environment)){

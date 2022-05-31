@@ -378,29 +378,36 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
     }
   }
 
+  // 注册NM的客户端代码
   @VisibleForTesting
   protected void registerWithRM()
       throws YarnException, IOException {
     RegisterNodeManagerResponse regNMResponse;
+    // 获取节点标签与属性
     Set<NodeLabel> nodeLabels = nodeLabelsHandler.getNodeLabelsForRegistration();
     Set<NodeAttribute> nodeAttributes =
         nodeAttributesHandler.getNodeAttributesForRegistration();
 
+    // 对context进行同步操作，在RM恢复时与以下两个方法同步
     // Synchronize NM-RM registration with
     // ContainerManagerImpl#increaseContainersResource and
     // ContainerManagerImpl#startContainers to avoid race condition
     // during RM recovery
     synchronized (this.context) {
+      // 获取container与节点状态
       List<NMContainerStatus> containerReports = getNMContainerStatuses();
       NodeStatus nodeStatus = getNodeStatus(0);
+      // 构建RegisterNodeManagerRequest对象
       RegisterNodeManagerRequest request =
           RegisterNodeManagerRequest.newInstance(nodeId, httpPort, totalResource,
               nodeManagerVersionId, containerReports, getRunningApplications(),
               nodeLabels, physicalResource, nodeAttributes, nodeStatus);
 
+      // 检查container列表是否为空，不为空时打印日志
       if (containerReports != null && !containerReports.isEmpty()) {
         LOG.info("Registering with RM using containers :" + containerReports);
       }
+      // 如果开启了日志聚合，收集本节点的日志聚合状态
       if (logAggregationEnabled) {
         // pull log aggregation status for application running in this NM
         List<LogAggregationReport> logAggregationReports =
@@ -413,12 +420,15 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
           request.setLogAggregationReportsForApps(logAggregationReports);
         }
       }
+      // 发送注册请求
       regNMResponse =
           resourceTracker.registerNodeManager(request);
+      // 确保在释放锁之前设置RM ID
       // Make sure rmIdentifier is set before we release the lock
       this.rmIdentifier = regNMResponse.getRMIdentifier();
     }
 
+    // 如果收到了shutdown指令，则注册失败，抛出异常
     // if the Resource Manager instructs NM to shutdown.
     if (NodeAction.SHUTDOWN.equals(regNMResponse.getNodeAction())) {
       String message =
@@ -429,6 +439,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
             + message);
     }
 
+    // 检查RM版本，如果版本不匹配则进行shutdown
     // if ResourceManager version is too old then shutdown
     if (!minimumResourceManagerVersion.equals("NONE")){
       if (minimumResourceManagerVersion.equals("EqualToNM")){
@@ -450,7 +461,9 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
       }
     }
     this.registeredWithRM = true;
+    // 设置Token
     MasterKey masterKey = regNMResponse.getContainerTokenMasterKey();
+    // 在心跳开始前设置Token，StatusUpdaterRunnable现在可以开始工作
     // do this now so that its set before we start heartbeating to RM
     // It is expected that status updater is started by this point and
     // RM gives the shared secret in registration during
@@ -464,10 +477,12 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
       this.context.getNMTokenSecretManager().setMasterKey(masterKey);
     }
 
+    // 构建注册成功的信息
     StringBuilder successfullRegistrationMsg = new StringBuilder();
     successfullRegistrationMsg.append("Registered with ResourceManager as ")
         .append(this.nodeId);
 
+    // 如果返回的Response里有新的资源信息，则进行更新
     Resource newResource = regNMResponse.getResource();
     if (newResource != null) {
       updateNMResource(newResource);
@@ -834,9 +849,11 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
     statusUpdater.start();
   }
 
+  // 处理shutdown或resync指令
   private boolean handleShutdownOrResyncCommand(
       NodeHeartbeatResponse response) {
     if (response.getNodeAction() == NodeAction.SHUTDOWN) {
+      // 收到shutdown指令，记录日志，执行shutdown
       LOG.warn("Received SHUTDOWN signal from Resourcemanager as part of"
           + " heartbeat, hence shutting down.");
       LOG.warn("Message from ResourceManager: "
@@ -847,15 +864,18 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
       return true;
     }
     if (response.getNodeAction() == NodeAction.RESYNC) {
+      // 收到resync指令，记录日志，执行resync
       LOG.warn("Node is out of sync with ResourceManager,"
           + " hence resyncing.");
       LOG.warn("Message from ResourceManager: "
           + response.getDiagnosticsMessage());
+      // 在resync过程中将RM ID临时设置为无效ID
       // Invalidate the RMIdentifier while resync
       NodeStatusUpdaterImpl.this.rmIdentifier =
           ResourceManagerConstants.RM_INVALID_IDENTIFIER;
       dispatcher.getEventHandler().handle(
           new NodeManagerEvent(NodeManagerEventType.RESYNC));
+      // 清理未发送的已完成container信息
       pendingCompletedContainers.clear();
       return true;
     }
@@ -1296,6 +1316,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
     }
   }
 
+  // StatusUpdaterRunnable线程类，NM心跳的客户端代码
   private class StatusUpdaterRunnable implements Runnable {
     @Override
     @SuppressWarnings("unchecked")
@@ -1303,14 +1324,18 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
       int lastHeartbeatID = 0;
       boolean missedHearbeat = false;
       while (!isStopped) {
+        // 发送心跳
         // Send heartbeat
         try {
           NodeHeartbeatResponse response = null;
+          // 获取节点标签与属性
           Set<NodeLabel> nodeLabelsForHeartbeat =
               nodeLabelsHandler.getNodeLabelsForHeartbeat();
           Set<NodeAttribute> nodeAttributesForHeartbeat =
                   nodeAttributesHandler.getNodeAttributesForHeartbeat();
+          // 获取节点状态
           NodeStatus nodeStatus = getNodeStatus(lastHeartbeatID);
+          // 构建心跳Request
           NodeHeartbeatRequest request =
               NodeHeartbeatRequest.newInstance(nodeStatus,
                   NodeStatusUpdaterImpl.this.context
@@ -1322,6 +1347,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
                   NodeStatusUpdaterImpl.this.context
                       .getRegisteringCollectors());
 
+          // 如果开启了日志聚合，收集本节点的日志聚合状态
           if (logAggregationEnabled) {
             // pull log aggregation status for application running in this NM
             List<LogAggregationReport> logAggregationReports =
@@ -1333,19 +1359,28 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
             }
           }
 
+          // 设置tokenSequenceNo
           request.setTokenSequenceNo(
               NodeStatusUpdaterImpl.this.tokenSequenceNo);
+          // 发送心跳并获取回复
           response = resourceTracker.nodeHeartbeat(request);
+          // 获取下一次心跳的间隔与MasterKeys
           //get next heartbeat interval from response
           nextHeartBeatInterval = response.getNextHeartBeatInterval();
           updateMasterKeys(response);
 
+          // 如果不是shutdown或resync命令，执行以下逻辑
           if (!handleShutdownOrResyncCommand(response)) {
+            // 检测Response中有关节点标签与属性的内容
             nodeLabelsHandler.verifyRMHeartbeatResponseForNodeLabels(
                 response);
             nodeAttributesHandler
                 .verifyRMHeartbeatResponseForNodeAttributes(response);
 
+            // 在检查resync Response后显式调用此方法
+            // 不可以在resync之前移除已完成的containers
+            // 因为这些已完成的containers会在NM再次与RM注册时汇报给RM
+            // 我们只移除已清理并且已ack的containers
             // Explicitly put this method after checking the resync
             // response. We
             // don't want to remove the completed containers before resync
@@ -1355,6 +1390,9 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
             removeOrTrackCompletedContainersFromContext(response
                 .getContainersToBeRemovedFromNM());
 
+            // 如果错过了上一次心跳，有可能RM会认为本次心跳为重复心跳，不做处理
+            // 此时，如果将待确认的已完成container清除，这些信息可能不会在下次心跳时被RM收到
+            // 如果确实不是重复心跳，唯一的影响是RM会被通知两次，RM可以处理被重复通知的情况
             // If the last heartbeat was missed, it is possible that the
             // RM saw this one as a duplicate and did not process it.
             // If so, we can fail to notify the RM of these completed containers
@@ -1370,7 +1408,9 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
             }
 
             logAggregationReportForAppsTempList.clear();
+            // 获取上一次的心跳ID
             lastHeartbeatID = response.getResponseId();
+            // 获取待清理的container列表并进行处理
             List<ContainerId> containersToCleanup = response
                 .getContainersToCleanup();
             if (!containersToCleanup.isEmpty()) {
@@ -1379,6 +1419,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
                       CMgrCompletedContainersEvent.Reason
                           .BY_RESOURCEMANAGER));
             }
+            // 获取待清理的任务列表并进行处理
             List<ApplicationId> appsToCleanup =
                 response.getApplicationsToCleanup();
             //Only start tracking for keepAlive on FINISH_APP
@@ -1388,6 +1429,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
                   new CMgrCompletedAppsEvent(appsToCleanup,
                       CMgrCompletedAppsEvent.Reason.BY_RESOURCEMANAGER));
             }
+            // 获取system credentials并进行更新
             Map<ApplicationId, ByteBuffer> systemCredentials =
                 YarnServerBuilderUtils.convertFromProtoFormat(
                     response.getSystemCredentialsForApps());
@@ -1396,6 +1438,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
                   parseCredentials(systemCredentials));
               context.getContainerManager().handleCredentialUpdate();
             }
+            // 获取待更新的container列表并进行处理
             List<org.apache.hadoop.yarn.api.records.Container>
                 containersToUpdate = response.getContainersToUpdate();
             if (!containersToUpdate.isEmpty()) {
@@ -1403,6 +1446,8 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
                   new CMgrUpdateContainersEvent(containersToUpdate));
             }
 
+            // 处理SignalContainer请求，该请求来自客户端的ClientRMProtocol
+            // 将请求转发到ContainerManager，后者会将该事件派遣到ContainerLauncher
             // SignalContainer request originally comes from end users via
             // ClientRMProtocol's SignalContainer. Forward the request to
             // ContainerManager which will dispatch the event to
@@ -1414,6 +1459,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
                   new CMgrSignalContainersEvent(containersToSignal));
             }
 
+            // 如果ContainerManager支持排队，更新QueuingLimits
             // Update QueuingLimits if ContainerManager supports queuing
             ContainerQueuingLimit queuingLimit =
                 response.getContainerQueuingLimit();
@@ -1421,8 +1467,10 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
               context.getContainerManager().updateQueuingLimit(queuingLimit);
             }
           }
+          // 处理需要更新节点资源的情况
           // Handling node resource update case.
           Resource newResource = response.getResource();
+          // 如果有新资源更新的请求，则更新资源
           if (newResource != null) {
             updateNMResource(newResource);
             LOG.debug("Node's resource is updated to {}", newResource);
@@ -1430,6 +1478,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
               LOG.info("Node's resource is updated to {}", newResource);
             }
           }
+          // 如果开启了timeline v2，更新collector
           if (timelineServiceV2Enabled) {
             updateTimelineCollectorData(response);
           }
@@ -1437,6 +1486,7 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
           NodeStatusUpdaterImpl.this.tokenSequenceNo =
               response.getTokenSequenceNo();
         } catch (ConnectException e) {
+          // 如果试图连接RM但无法连上，处理连接异常并shutdown
           //catch and throw the exception if tried MAX wait time to connect RM
           dispatcher.getEventHandler().handle(
               new NodeManagerEvent(NodeManagerEventType.SHUTDOWN));
@@ -1444,13 +1494,14 @@ public class NodeStatusUpdaterImpl extends AbstractService implements
           failedToConnect = true;
           throw new YarnRuntimeException(e);
         } catch (Exception e) {
-
+          // 其他异常，默认心跳被错过
           // TODO Better error handling. Thread can die with the rest of the
           // NM still running.
           LOG.error("Caught exception in status-updater", e);
           missedHearbeat = true;
         } finally {
           synchronized (heartbeatMonitor) {
+            // 计算下一次心跳间隔
             nextHeartBeatInterval = nextHeartBeatInterval <= 0 ?
                 YarnConfiguration.DEFAULT_RM_NM_HEARTBEAT_INTERVAL_MS :
                 nextHeartBeatInterval;

@@ -28,6 +28,7 @@ import org.apache.hadoop.classification.InterfaceAudience.Public;
 import org.apache.hadoop.classification.InterfaceStability.Evolving;
 import org.apache.hadoop.service.AbstractService;
 
+// 基础心跳监控模块
 /**
  * A simple liveliness monitor with which clients can register, trust the
  * component to monitor liveliness, get a call-back on expiry and then finally
@@ -62,16 +63,21 @@ public abstract class AbstractLivelinessMonitor<O> extends AbstractService {
     this(name, new MonotonicClock());
   }
 
+  // 服务开始
   @Override
   protected void serviceStart() throws Exception {
+    // 检查是否已经结束
     assert !stopped : "starting when already stopped";
+    // 重置计时器
     resetTimer();
+    // 新建线程进行ping检查
     checkerThread = new Thread(new PingChecker());
     checkerThread.setName("Ping Checker for "+getName());
     checkerThread.start();
     super.serviceStart();
   }
 
+  // 服务结束
   @Override
   protected void serviceStop() throws Exception {
     stopped = true;
@@ -96,6 +102,7 @@ public abstract class AbstractLivelinessMonitor<O> extends AbstractService {
     this.monitorInterval = monitorInterval;
   }
 
+  // 在Map里更新某个项目的ping时间
   public synchronized void receivedPing(O ob) {
     //only put for the registered objects
     if (running.containsKey(ob)) {
@@ -107,6 +114,7 @@ public abstract class AbstractLivelinessMonitor<O> extends AbstractService {
     register(ob, clock.getTime());
   }
 
+  // 增加新的监控项目
   public synchronized void register(O ob, long expireTime) {
     running.put(ob, expireTime);
   }
@@ -115,6 +123,7 @@ public abstract class AbstractLivelinessMonitor<O> extends AbstractService {
     running.remove(ob);
   }
 
+  // 重置计时器，所有监控项目更新为当前时间
   public synchronized void resetTimer() {
     if (resetTimerOnStart) {
       long time = clock.getTime();
@@ -128,12 +137,14 @@ public abstract class AbstractLivelinessMonitor<O> extends AbstractService {
     this.resetTimerOnStart = resetTimeOnStart;
   }
 
+  // ping检查类
   private class PingChecker implements Runnable {
 
     @Override
     public void run() {
       while (!stopped && !Thread.currentThread().isInterrupted()) {
         synchronized (AbstractLivelinessMonitor.this) {
+          // 检查每个要监控的项目
           Iterator<Map.Entry<O, Long>> iterator = running.entrySet().iterator();
 
           // avoid calculating current time everytime in loop
@@ -143,6 +154,7 @@ public abstract class AbstractLivelinessMonitor<O> extends AbstractService {
             Map.Entry<O, Long> entry = iterator.next();
             O key = entry.getKey();
             long interval = getExpireInterval(key);
+            // 如果要监控的项目已经过期，调用过期方法，移除监控
             if (currentTime > entry.getValue() + interval) {
               iterator.remove();
               expire(key);

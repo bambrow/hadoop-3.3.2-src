@@ -34,19 +34,24 @@ import java.util.Map;
 @Evolving
 public interface Service extends Closeable {
 
+  // 服务状态：NOTINITED，INITED，STARTED，STOPPED
   /**
    * Service states
    */
   public enum STATE {
+    // 创建但未初始化
     /** Constructed but not initialized */
     NOTINITED(0, "NOTINITED"),
 
+    // 已初始化，但未开始或结束
     /** Initialized but not started or stopped */
     INITED(1, "INITED"),
 
+    // 已开始，但未结束
     /** started and not stopped */
     STARTED(2, "STARTED"),
 
+    // 已结束，不允许再变更状态
     /** stopped. No further state transitions are permitted */
     STOPPED(3, "STOPPED");
 
@@ -85,6 +90,7 @@ public interface Service extends Closeable {
     }
   }
 
+  // 初始化，必须从NOTINITED变成INITED，除非出现异常，出现异常时进入STOPPED
   /**
    * Initialize the service.
    *
@@ -99,6 +105,7 @@ public interface Service extends Closeable {
   void init(Configuration config);
 
 
+  // 开始服务，必须从INITED变成STARTED，除非出现异常，出现异常时进入STOPPED
   /**
    * Start the service.
    *
@@ -111,6 +118,7 @@ public interface Service extends Closeable {
 
   void start();
 
+  // 结束服务，必须进入STOPPED，如果已经为STOPPED则不做操作
   /**
    * Stop the service. This MUST be a no-op if the service is already
    * in the {@link STATE#STOPPED} state. It SHOULD be a best-effort attempt
@@ -132,6 +140,7 @@ public interface Service extends Closeable {
    */
   void close() throws IOException;
 
+  // 注册一个监听器，用于监听服务的状态改变
   /**
    * Register a listener to the service state change events.
    * If the supplied listener is already listening to this service,
@@ -140,6 +149,7 @@ public interface Service extends Closeable {
    */
   void registerServiceListener(ServiceStateChangeListener listener);
 
+  // 取消注册一个监听器
   /**
    * Unregister a previously registered listener of the service state
    * change events. No-op if the listener is already unregistered.
@@ -196,6 +206,7 @@ public interface Service extends Closeable {
    */
   STATE getFailureState();
 
+  // 阻塞等待服务结束
   /**
    * Block waiting for the service to stop; uses the termination notification
    * object to do so.

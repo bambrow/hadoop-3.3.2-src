@@ -37,6 +37,10 @@ public class CompositeService extends AbstractService {
   private static final Logger LOG =
       LoggerFactory.getLogger(CompositeService.class);
 
+  // 此变量决定如下行为：
+  // 如true，只停止已经开始的服务（假设服务没有在未开始的时候提供合适的停止方法）
+  // 如false，尝试停止所有服务
+  // 与该策略无关的一点补充：如果子服务在初始化或开始阶段报错，则子服务会直接调用停止方法进入STOPPED状态
   /**
    * Policy on shutdown: attempt to close everything (purest) or
    * only try to close started services (which assumes
@@ -53,6 +57,7 @@ public class CompositeService extends AbstractService {
     super(name);
   }
 
+  // 返回克隆的服务列表
   /**
    * Get a cloned list of services
    * @return a list of child services at the time of invocation -
@@ -64,6 +69,7 @@ public class CompositeService extends AbstractService {
     }
   }
 
+  // 向服务列表里增加服务
   /**
    * Add the passed {@link Service} to the list of services managed by this
    * {@link CompositeService}
@@ -78,6 +84,7 @@ public class CompositeService extends AbstractService {
     }
   }
 
+  // 检查是否是Service对象，如果是则添加服务
   /**
    * If the passed object is an instance of {@link Service},
    * add it to the list of services managed by this {@link CompositeService}
@@ -93,6 +100,7 @@ public class CompositeService extends AbstractService {
     }
   }
 
+  // 在服务列表里删除服务
   protected boolean removeService(Service service) {
     LOG.debug("Removing service {}", service.getName());
     synchronized (serviceList) {
@@ -100,6 +108,7 @@ public class CompositeService extends AbstractService {
     }
   }
 
+  // 调用getServices获取服务列表，随后循环初始化所有服务
   protected void serviceInit(Configuration conf) throws Exception {
     List<Service> services = getServices();
     if (LOG.isDebugEnabled()) {
@@ -111,6 +120,7 @@ public class CompositeService extends AbstractService {
     super.serviceInit(conf);
   }
 
+  // 调用getServices获取服务列表，随后循环开启所有服务
   protected void serviceStart() throws Exception {
     List<Service> services = getServices();
     if (LOG.isDebugEnabled()) {
@@ -124,6 +134,7 @@ public class CompositeService extends AbstractService {
     super.serviceStart();
   }
 
+  // 取决于如上定义的停止策略，进行服务停止操作
   protected void serviceStop() throws Exception {
     //stop all services that were started
     int numOfServicesToStop = serviceList.size();
@@ -134,6 +145,7 @@ public class CompositeService extends AbstractService {
     super.serviceStop();
   }
 
+  // 实际的停止方法，倒序停止服务
   /**
    * Stop the services in reverse order
    *
@@ -146,22 +158,29 @@ public class CompositeService extends AbstractService {
   private void stop(int numOfServicesStarted, boolean stopOnlyStartedServices) {
     // stop in reverse order of start
     Exception firstException = null;
+    // 使用getServices获取服务列表
     List<Service> services = getServices();
+    // 倒序停止服务
     for (int i = numOfServicesStarted - 1; i >= 0; i--) {
       Service service = services.get(i);
       if (LOG.isDebugEnabled()) {
         LOG.debug("Stopping service #" + i + ": " + service);
       }
+      // 检查当前服务状态
       STATE state = service.getServiceState();
+      // 考虑停止策略，如果停止策略允许，则考虑INITED的服务，否则只考虑STARTED的服务
       //depending on the stop police
       if (state == STATE.STARTED 
          || (!stopOnlyStartedServices && state == STATE.INITED)) {
+        // 安静停止任务，如果出错不会抛出异常，而是会记录WARN日志
         Exception ex = ServiceOperations.stopQuietly(LOG, service);
         if (ex != null && firstException == null) {
+          // 保存第一个获得的异常
           firstException = ex;
         }
       }
     }
+    // 所有服务停止完毕后，抛出第一个获得的异常
     //after stopping all services, rethrow the first exception raised
     if (firstException != null) {
       throw ServiceStateException.convert(firstException);

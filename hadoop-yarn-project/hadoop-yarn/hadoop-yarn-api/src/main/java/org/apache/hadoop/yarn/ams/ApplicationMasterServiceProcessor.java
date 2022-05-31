@@ -31,12 +31,14 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 
 import java.io.IOException;
 
+// 将Application Master Service的处理逻辑抽象出来的接口
 /**
  * Interface to abstract out the the actual processing logic of the
  * Application Master Service.
  */
 public interface ApplicationMasterServiceProcessor {
 
+  // 使用ApplicationMasterServiceContext初始化，并且定义处理链上的下一个处理程序
   /**
    * Initialize with and ApplicationMasterService Context as well as the
    * next processor in the chain.
@@ -46,6 +48,7 @@ public interface ApplicationMasterServiceProcessor {
   void init(ApplicationMasterServiceContext amsContext,
       ApplicationMasterServiceProcessor nextProcessor);
 
+  // 注册AM尝试
   /**
    * Register AM attempt.
    * @param applicationAttemptId applicationAttemptId.

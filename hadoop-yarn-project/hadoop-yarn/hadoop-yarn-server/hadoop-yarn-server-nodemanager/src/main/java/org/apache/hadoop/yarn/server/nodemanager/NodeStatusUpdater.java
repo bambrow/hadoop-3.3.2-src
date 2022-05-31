@@ -25,6 +25,7 @@ import org.apache.hadoop.yarn.server.nodemanager.nodelabels.NodeLabelsProvider;
 
 public interface NodeStatusUpdater extends Service {
 
+  // 在定期发送之外安排一次心跳发送，一般在container状态改变时为了更早通知RM而使用
   /**
    * Schedule a heartbeat to the ResourceManager outside of the normal,
    * periodic heartbeating process. This is typically called when the state
@@ -32,25 +33,29 @@ public interface NodeStatusUpdater extends Service {
    */
   void sendOutofBandHeartBeat();
 
+  // 返回注册时得到的RM ID
   /**
    * Get the ResourceManager identifier received during registration
    * @return the ResourceManager ID
    */
   long getRMIdentifier();
-  
+
+  // 检查是否最近有container完成运行
   /**
    * Query if a container has recently completed
    * @param containerId the container ID
    * @return true if the container has recently completed
    */
   public boolean isContainerRecentlyStopped(ContainerId containerId);
-  
+
+  // 将一个container加入已完成列表
   /**
    * Add a container to the list of containers that have recently completed
    * @param containerId the ID of the completed container
    */
   public void addCompletedContainer(ContainerId containerId);
 
+  // 清理已完成的container列表
   /**
    * Clear the list of recently completed containers
    */

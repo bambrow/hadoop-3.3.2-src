@@ -27,6 +27,7 @@ import org.apache.hadoop.classification.InterfaceStability.Evolving;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// 服务相关的辅助方法
 /**
  * This class contains a set of methods to work with services, especially
  * to walk them through their lifecycle.
@@ -55,6 +56,8 @@ public final class ServiceOperations {
     }
   }
 
+  // 安静停止服务，不抛出异常，用WARN日志记录异常
+  // 预期在cleanup操作中使用该方法
   /**
    * Stop a service; if it is null do nothing. Exceptions are caught and
    * logged at warn level. (but not Throwables). This operation is intended to
@@ -67,6 +70,8 @@ public final class ServiceOperations {
     return stopQuietly(LOG, service);
   }
 
+  // 安静停止服务，不抛出异常，用WARN日志记录异常
+  // 预期在cleanup操作中使用该方法
   /**
    * Stop a service; if it is null do nothing. Exceptions are caught and
    * logged at warn level. (but not Throwables). This operation is intended to
@@ -87,6 +92,8 @@ public final class ServiceOperations {
     return null;
   }
 
+  // 安静停止服务，不抛出异常，用WARN日志记录异常
+  // 预期在cleanup操作中使用该方法
   /**
    * Stop a service; if it is null do nothing. Exceptions are caught and
    * logged at warn level. (but not Throwables). This operation is intended to
@@ -107,6 +114,7 @@ public final class ServiceOperations {
     return null;
   }
 
+  // 维护一个ServiceStateChangeListener列表，监控服务的状态改变
   /**
    * Class to manage a list of {@link ServiceStateChangeListener} instances,
    * including a notification loop that is robust against changes to the list
@@ -148,6 +156,8 @@ public final class ServiceOperations {
       listeners.clear();
     }
 
+    // 进行状态改变并通知所有监听器
+    // 该方法会阻塞直至所有通知发出
     /**
      * Change to a new state and notify all listeners.
      * This method will block until all notifications have been issued.
@@ -156,12 +166,14 @@ public final class ServiceOperations {
      * @param service the service that has changed state
      */
     public void notifyListeners(Service service) {
+      // 复制一份监听器列表
       //take a very fast snapshot of the callback list
       //very much like CopyOnWriteArrayList, only more minimal
       ServiceStateChangeListener[] callbacks;
       synchronized (this) {
         callbacks = listeners.toArray(new ServiceStateChangeListener[listeners.size()]);
       }
+      // 使用复制的监听器列表进行通知
       //iterate through the listeners outside the synchronized method,
       //ensuring that listener registration/unregistration doesn't break anything
       for (ServiceStateChangeListener l : callbacks) {

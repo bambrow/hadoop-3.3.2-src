@@ -31,15 +31,19 @@ import org.apache.hadoop.yarn.util.AbstractLivelinessMonitor;
 public class NMLivelinessMonitor extends AbstractLivelinessMonitor<NodeId> {
 
   private EventHandler<Event> dispatcher;
-  
+
+  // 对于NMLivelinessMonitor，监控的项目key就是NodeId
   public NMLivelinessMonitor(Dispatcher d) {
     super("NMLivelinessMonitor");
     this.dispatcher = d.getEventHandler();
   }
 
+  // 服务初始化
   public void serviceInit(Configuration conf) throws Exception {
+    // yarn.am.liveness-monitor.expiry-interval-ms，默认600000
     int expireIntvl = conf.getInt(YarnConfiguration.RM_NM_EXPIRY_INTERVAL_MS,
             YarnConfiguration.DEFAULT_RM_NM_EXPIRY_INTERVAL_MS);
+    // 默认的监控间隔是1/3的过期间隔
     setExpireInterval(expireIntvl);
     setMonitorInterval(expireIntvl/3);
     super.serviceInit(conf);

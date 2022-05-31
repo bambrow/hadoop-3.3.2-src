@@ -45,6 +45,7 @@ class AMSProcessingChain implements ApplicationMasterServiceProcessor {
   private ApplicationMasterServiceProcessor head;
   private RMContext rmContext;
 
+  // 必须有根处理程序，否则报错
   /**
    * This has to be initialized with at-least 1 Processor.
    * @param rootProcessor Root processor.
@@ -57,6 +58,7 @@ class AMSProcessingChain implements ApplicationMasterServiceProcessor {
     this.head = rootProcessor;
   }
 
+  // 初始化方法，目前并没有使用链条的下一个处理程序，显式将下一个程序设置为null
   @Override
   public void init(ApplicationMasterServiceContext amsContext,
       ApplicationMasterServiceProcessor nextProcessor) {
@@ -67,6 +69,7 @@ class AMSProcessingChain implements ApplicationMasterServiceProcessor {
     this.head.init(amsContext, null);
   }
 
+  // 将一个处理程序放在链条头部
   /**
    * Add an processor to the top of the chain.
    * @param processor ApplicationMasterServiceProcessor

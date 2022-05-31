@@ -33,6 +33,7 @@ import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTest
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// 基础服务模块
 /**
  * This is the base implementation class for services.
  */
@@ -141,6 +142,7 @@ public abstract class AbstractService implements Service {
     this.config = conf;
   }
 
+  // 服务初始化
   /**
    * {@inheritDoc}
    * This invokes {@link #serviceInit}
@@ -150,10 +152,12 @@ public abstract class AbstractService implements Service {
    */
   @Override
   public void init(Configuration conf) {
+    // 如果配置为null，直接报错
     if (conf == null) {
       throw new ServiceStateException("Cannot initialize service "
                                       + getName() + ": null configuration");
     }
+    // 如果已经初始化，直接return
     if (isInState(STATE.INITED)) {
       return;
     }
@@ -161,8 +165,10 @@ public abstract class AbstractService implements Service {
       if (enterState(STATE.INITED) != STATE.INITED) {
         setConfig(conf);
         try {
+          // 调用实际的serviceInit
           serviceInit(config);
           if (isInState(STATE.INITED)) {
+            // 如果进入INITED状态，通知监听器
             //if the service ended up here during init,
             //notify the listeners
             notifyListeners();
@@ -176,6 +182,7 @@ public abstract class AbstractService implements Service {
     }
   }
 
+  // 服务开始运行
   /**
    * {@inheritDoc}
    * @throws ServiceStateException if the current service state does not permit
@@ -183,6 +190,7 @@ public abstract class AbstractService implements Service {
    */
   @Override
   public void start() {
+    // 如果已经开始运行，直接return
     if (isInState(STATE.STARTED)) {
       return;
     }
@@ -190,9 +198,11 @@ public abstract class AbstractService implements Service {
     synchronized (stateChangeLock) {
       if (stateModel.enterState(STATE.STARTED) != STATE.STARTED) {
         try {
+          // 设置开始时间，调用实际方法
           startTime = System.currentTimeMillis();
           serviceStart();
           if (isInState(STATE.STARTED)) {
+            // 如果进入STARTED状态，通知监听器
             //if the service started (and isn't now in a later state), notify
             LOG.debug("Service {} is started", getName());
             notifyListeners();
@@ -206,23 +216,27 @@ public abstract class AbstractService implements Service {
     }
   }
 
+  // 服务结束运行
   /**
    * {@inheritDoc}
    */
   @Override
   public void stop() {
+    // 如果已经结束运行，直接return
     if (isInState(STATE.STOPPED)) {
       return;
     }
     synchronized (stateChangeLock) {
       if (enterState(STATE.STOPPED) != STATE.STOPPED) {
         try {
+          // 调用实际方法
           serviceStop();
         } catch (Exception e) {
           //stop-time exceptions are logged if they are the first one,
           noteFailure(e);
           throw ServiceStateException.convert(e);
         } finally {
+          // 报告状态，通知监听器
           //report that the service has terminated
           terminationNotification.set(true);
           synchronized (terminationNotification) {
@@ -289,6 +303,7 @@ public abstract class AbstractService implements Service {
     return terminationNotification.get();
   }
 
+  // 以下为需要override的方法
   /* ===================================================================== */
   /* Override Points */
   /* ===================================================================== */
